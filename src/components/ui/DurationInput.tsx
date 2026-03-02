@@ -23,6 +23,7 @@ export type DurationInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'va
   maxHours?: number;
   maxMinutes?: number;
   maxSeconds?: number;
+  className?: string;
 };
 
 export function DurationInput({
@@ -34,6 +35,7 @@ export function DurationInput({
   maxSeconds,
   disabled = false,
   inputMode = 'numeric',
+  className,
   ...inputProps
 }: DurationInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -248,6 +250,7 @@ export function DurationInput({
       ref={inputRef}
       type="text"
       inputMode={inputMode}
+      className={className}
       value={activeDisplay}
       disabled={disabled}
       onFocus={() => {

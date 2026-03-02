@@ -19,6 +19,7 @@ https://github.com/rcotta/duration-input
 - Single `<input />` with dynamic `:` mask
 - Modes: `ss`, `mm`, `hh`, `mm:ss`, `hh:mm`, `hh:mm:ss`
 - Controlled value as total seconds (`number`)
+- Accepts standard input props like `className`, `id`, `name`, `aria-*`
 - Numeric, segment-aware editing
 - Dynamic leading-segment width from configured max (`max*`)
 - Better mobile behavior via `beforeinput` + `onChange` fallback
@@ -52,6 +53,27 @@ type DurationInputProps = Omit<
   maxMinutes?: number;
   maxSeconds?: number;
 };
+```
+
+## Styling
+
+Use `className` or inline styles like any standard input:
+
+```tsx
+<DurationInput
+  value={seconds}
+  onChange={setSeconds}
+  mode="hh:mm:ss"
+  className="duration-field"
+/>
+```
+
+```css
+.duration-field {
+  width: 220px;
+  max-width: 100%;
+  padding: 10px 12px;
+}
 ```
 
 ## Validation rules
