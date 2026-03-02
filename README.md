@@ -126,6 +126,9 @@ Pages:
 - PT-BR: `http://localhost:5173/index.html`
 - EN: `http://localhost:5173/en.html`
 
+Live demo (CodeSandbox):
+- https://codesandbox.io/p/sandbox/mclnfc
+
 ## Development
 
 ```bash
