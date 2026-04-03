@@ -22,6 +22,7 @@ https://github.com/rcotta/duration-input
 - Accepts standard input props like `className`, `id`, `name`, `aria-*`
 - Numeric, segment-aware editing
 - Dynamic leading-segment width from configured max (`max*`)
+- Supports `maxTime` (`HH:MM:SS`) as a global max duration limit
 - Better mobile behavior via `beforeinput` + `onChange` fallback
 - Built-in clamping/validation per mode
 
@@ -52,6 +53,7 @@ type DurationInputProps = Omit<
   maxHours?: number;
   maxMinutes?: number;
   maxSeconds?: number;
+  maxTime?: string; // "HH:MM:SS" (priority over max*)
 };
 ```
 
@@ -83,10 +85,21 @@ Use `className` or inline styles like any standard input:
 - `hh:mm`/`hh:mm:ss`: minutes clamp to `0..59`
 - `ss`: clamps with `maxSeconds` when provided
 - Modes with segmented seconds (`mm:ss`, `hh:mm:ss`) clamp seconds to `0..59`
+- `maxTime` (format `HH:MM:SS`) has priority over all `max*` props
+- Clamp/normalization is applied when leaving the field (`blur`)
+
+## maxTime
+
+- Prop: `maxTime?: string`
+- Format: `HH:MM:SS` (example: `01:30:00`, `99:59:59`)
+- Priority: when provided and valid, it overrides `maxHours`, `maxMinutes`, and `maxSeconds`
+- Clamp timing: applied on `blur` (when the input loses focus)
 
 ## Editing behavior
 
 - `Ctrl+A` + `Backspace/Delete` clears and moves caret to start
+- Typing a digit with caret at end (`...^`) shifts all digits left and appends the new digit on the right
+- Typing a digit with caret in any other position keeps positional editing (overwrite + caret moves right)
 - `Backspace` at end shifts digits right (helpful on mobile)
 - `onChange` only fires when total seconds actually changes
 
@@ -104,7 +117,7 @@ export function Example() {
       value={seconds}
       onChange={setSeconds}
       mode="hh:mm:ss"
-      maxHours={99}
+      maxTime="01:00:00"
       aria-label="Duration"
       name="duration"
     />

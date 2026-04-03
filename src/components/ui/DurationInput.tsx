@@ -9,6 +9,7 @@ import {
   getSegmentWidths,
   isEditingShortcut,
   normalizeRaw,
+  parseMaxTime,
   replaceSelection,
   secondsToSegments,
 } from './duration-input.utils';
@@ -23,6 +24,7 @@ export type DurationInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'va
   maxHours?: number;
   maxMinutes?: number;
   maxSeconds?: number;
+  maxTime?: string;
   className?: string;
 };
 
@@ -33,6 +35,7 @@ export function DurationInput({
   maxHours,
   maxMinutes,
   maxSeconds,
+  maxTime,
   disabled = false,
   inputMode = 'numeric',
   className,
@@ -41,7 +44,22 @@ export function DurationInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaretRef = useRef<number | null>(null);
 
-  const limits: DurationLimits = useMemo(() => ({ maxHours, maxMinutes, maxSeconds }), [maxHours, maxMinutes, maxSeconds]);
+  const limits: DurationLimits = useMemo(() => {
+    const maxTotalSeconds = parseMaxTime(maxTime);
+    if (maxTotalSeconds === undefined) {
+      return { maxHours, maxMinutes, maxSeconds };
+    }
+
+    if (mode === 'ss') {
+      return { maxSeconds: maxTotalSeconds, maxTotalSeconds };
+    }
+
+    if (mode === 'mm' || mode === 'mm:ss') {
+      return { maxMinutes: Math.floor(maxTotalSeconds / 60), maxTotalSeconds };
+    }
+
+    return { maxHours: Math.floor(maxTotalSeconds / 3600), maxTotalSeconds };
+  }, [maxHours, maxMinutes, maxSeconds, maxTime, mode]);
   const widths = useMemo(() => getSegmentWidths(mode, limits), [mode, limits]);
   const externalDisplay = useMemo(() => {
     const values = secondsToSegments(mode, value, limits);
@@ -75,7 +93,7 @@ export function DurationInput({
   };
 
   const applyRaw = (raw: string, nextCaret?: number) => {
-    const normalized = normalizeRaw(mode, raw, limits, widths);
+    const normalized = normalizeRaw(mode, raw, limits, widths, { clamp: false });
     commitNormalized(normalized, nextCaret);
   };
 
@@ -99,7 +117,14 @@ export function DurationInput({
   const applyDeleteShiftAtEnd = () => {
     const digits = activeDisplay.replace(/\D/g, '');
     const shiftedDigits = digits.slice(0, -1);
-    const normalized = normalizeRaw(mode, shiftedDigits, limits, widths);
+    const normalized = normalizeRaw(mode, shiftedDigits, limits, widths, { clamp: false });
+    commitNormalized(normalized, normalized.display.length);
+  };
+
+  const applyInsertShiftAtEnd = (digit: string) => {
+    const digits = activeDisplay.replace(/\D/g, '');
+    const shiftedDigits = `${digits.slice(1)}${digit}`;
+    const normalized = normalizeRaw(mode, shiftedDigits, limits, widths, { clamp: false });
     commitNormalized(normalized, normalized.display.length);
   };
 
@@ -129,6 +154,12 @@ export function DurationInput({
   };
 
   const handleDigitInsertion = (digit: string, cursor: number, selectionEnd: number) => {
+    const hasSelection = selectionEnd !== cursor;
+    if (!hasSelection && cursor === activeDisplay.length) {
+      applyInsertShiftAtEnd(digit);
+      return;
+    }
+
     const ranges = getRanges(activeDisplay, mode);
     const targetRange = findRangeAtPosition(ranges, cursor);
     if (!targetRange) return;
@@ -136,7 +167,6 @@ export function DurationInput({
     const segments = getModeSegments(mode);
     const leadingSegment = segments[0];
     const isLeadingSegment = targetRange.key === leadingSegment;
-    const hasSelection = selectionEnd !== cursor;
 
     if (hasSelection) {
       const nextDisplay = replaceSelection(activeDisplay, cursor, selectionEnd, digit);
@@ -258,7 +288,7 @@ export function DurationInput({
         setDraftDisplay(externalDisplay);
       }}
       onBlur={() => {
-        const normalized = normalizeRaw(mode, draftDisplay, limits, widths);
+        const normalized = normalizeRaw(mode, draftDisplay, limits, widths, { clamp: true });
         commitNormalized(normalized);
         setIsEditing(false);
       }}

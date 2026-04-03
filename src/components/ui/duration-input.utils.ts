@@ -13,6 +13,7 @@ export type DurationLimits = {
   maxHours?: number;
   maxMinutes?: number;
   maxSeconds?: number;
+  maxTotalSeconds?: number;
 };
 export type NormalizedDuration = {
   values: SegmentValues;
@@ -56,21 +57,29 @@ function clamp(n: number, min: number, max?: number): number {
   return n;
 }
 
+function clampTotalSeconds(totalSeconds: number, maxTotalSeconds?: number): number {
+  if (!Number.isFinite(totalSeconds) || Number.isNaN(totalSeconds)) return 0;
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  if (maxTotalSeconds === undefined) return safe;
+  return Math.min(safe, Math.max(0, Math.floor(maxTotalSeconds)));
+}
+
 function applyModeValidation(mode: DurationMode, values: SegmentValues, limits: DurationLimits): SegmentValues {
   const normalized = { ...values };
+  const hasTotalLimit = limits.maxTotalSeconds !== undefined;
 
   if (mode.includes('hh')) {
-    normalized.hh = clamp(normalized.hh, 0, limits.maxHours);
+    normalized.hh = clamp(normalized.hh, 0, hasTotalLimit ? undefined : limits.maxHours);
   }
 
   if (mode === 'mm' || mode === 'mm:ss') {
-    normalized.mm = clamp(normalized.mm, 0, limits.maxMinutes);
+    normalized.mm = clamp(normalized.mm, 0, hasTotalLimit ? undefined : limits.maxMinutes);
   } else if (mode.includes('mm')) {
     normalized.mm = clamp(normalized.mm, 0, 59);
   }
 
   if (mode === 'ss') {
-    normalized.ss = clamp(normalized.ss, 0, limits.maxSeconds);
+    normalized.ss = clamp(normalized.ss, 0, hasTotalLimit ? undefined : limits.maxSeconds);
   } else if (mode.includes('ss')) {
     normalized.ss = clamp(normalized.ss, 0, 59);
   }
@@ -79,7 +88,7 @@ function applyModeValidation(mode: DurationMode, values: SegmentValues, limits: 
 }
 
 export function secondsToSegments(mode: DurationMode, totalSeconds: number, limits: DurationLimits): SegmentValues {
-  const safeSeconds = Math.max(0, Math.floor(Number.isFinite(totalSeconds) ? totalSeconds : 0));
+  const safeSeconds = clampTotalSeconds(totalSeconds, limits.maxTotalSeconds);
   const values: SegmentValues = {
     hh: Math.floor(safeSeconds / 3600),
     mm: Math.floor((safeSeconds % 3600) / 60),
@@ -195,14 +204,54 @@ function parseRawInput(raw: string, mode: DurationMode): SegmentValues {
   return parsed;
 }
 
-export function normalizeRaw(mode: DurationMode, raw: string, limits: DurationLimits, widths: SegmentWidths): NormalizedDuration {
+export type NormalizeRawOptions = {
+  clamp?: boolean;
+};
+
+export function normalizeRaw(
+  mode: DurationMode,
+  raw: string,
+  limits: DurationLimits,
+  widths: SegmentWidths,
+  options: NormalizeRawOptions = {}
+): NormalizedDuration {
   const parsed = parseRawInput(raw, mode);
-  const values = applyModeValidation(mode, parsed, limits);
+  const shouldClamp = options.clamp ?? true;
+
+  if (!shouldClamp) {
+    return {
+      values: parsed,
+      display: formatDisplay(mode, parsed, widths),
+      seconds: segmentsToSeconds(mode, parsed),
+    };
+  }
+
+  const preClampedValues = applyModeValidation(mode, parsed, limits);
+  const preClampedSeconds = segmentsToSeconds(mode, preClampedValues);
+  const totalSeconds = clampTotalSeconds(preClampedSeconds, limits.maxTotalSeconds);
+  const values = secondsToSegments(mode, totalSeconds, limits);
   return {
     values,
     display: formatDisplay(mode, values, widths),
     seconds: segmentsToSeconds(mode, values),
   };
+}
+
+export function parseMaxTime(maxTime?: string): number | undefined {
+  if (!maxTime) return undefined;
+
+  const normalized = maxTime.trim();
+  const match = normalized.match(/^(\d+):(\d{1,2}):(\d{1,2})$/);
+  if (!match) return undefined;
+
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2], 10);
+  const seconds = Number.parseInt(match[3], 10);
+
+  if (minutes > 59 || seconds > 59) return undefined;
+
+  const total = hours * 3600 + minutes * 60 + seconds;
+  return Number.isFinite(total) && !Number.isNaN(total) ? total : undefined;
 }
 
 export function getRanges(display: string, mode: DurationMode): SegmentRange[] {
